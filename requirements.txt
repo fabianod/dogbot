@@ -6,3 +6,4 @@ aioredis
 youtube_dl
 beautifulsoup4
 raven
+kyoukai

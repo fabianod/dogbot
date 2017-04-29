@@ -9,11 +9,13 @@ import aioredis
 import discord
 import raven
 from discord.ext import commands
+from kyoukai import Kyoukai
 
 import dog_config as cfg
 
 from . import botcollection, errors
 from .utils import pretty_timedelta
+from dog.blueprints import WebBlueprint
 
 logger = logging.getLogger(__name__)
 
@@ -26,16 +28,12 @@ class DogBot(commands.AutoShardedBot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # boot time (for uptime)
         self.boot_time = datetime.datetime.utcnow()
 
-        # hack because __init__ cannot be async
-        _loop = asyncio.get_event_loop()
-        _redis_coroutine = aioredis.create_redis(
-            (cfg.redis_url, 6379), loop=_loop)
-
-        # aioredis connection
-        self.redis = _loop.run_until_complete(_redis_coroutine)
+        # redis
+        redis_coroutine = aioredis.create_redis(
+            (cfg.redis_url, 6379), loop=self.loop)
+        self.redis = self.loop.run_until_complete(redis_coroutine)
 
         # aiohttp session used for fetching data
         self.session = aiohttp.ClientSession()
@@ -43,9 +41,13 @@ class DogBot(commands.AutoShardedBot):
         # sentry connection for reporting exceptions
         self.sentry = raven.Client(cfg.raven_client_url)
 
-        # asyncio task that POSTs to bots.discord.pw with the guild count every
-        # 10 minutes
+        # asyncio task that POSTs to bots.discord.pw
         self.report_task = None
+
+        # kyoukai
+        self.kyk = Kyoukai('dogbot', loop=self.loop)
+        self.kyk.register_blueprint(WebBlueprint)
+        self.loop.run_until_complete(self.kyk.start())
 
     async def pick_from_list(self, ctx: commands.Context, choices: List[Any]) -> Any:
         """ Shows the user a list of items to pick from. Returns the picked item. """
